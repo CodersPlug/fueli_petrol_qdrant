@@ -44,10 +44,39 @@ def get_collection_info_direct(url: str, api_key: str) -> dict:
             timeout=60
         )
         response.raise_for_status()
-        return response.json()
+        
+        # Parse JSON response
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            st.error("Error al decodificar la respuesta JSON del servidor")
+            st.error(f"Respuesta del servidor: {response.text}")
+            st.stop()
+            
+        # Extract points count from response
+        if isinstance(data, dict):
+            result = data.get("result", {})
+            status = result.get("status", {})
+            points_count = status.get("points_count", 0)
+            
+            return {
+                "vectors_count": points_count,
+                "config": result.get("config", {})
+            }
+        else:
+            st.error("Formato de respuesta inesperado")
+            st.error(f"Respuesta del servidor: {data}")
+            st.stop()
+            
+    except requests.exceptions.RequestException as e:
+        st.error("Error al obtener información de la colección")
+        st.error(f"Error de conexión: {str(e)}")
+        st.stop()
     except Exception as e:
-        st.error("Error al obtener información de la colección directamente")
+        st.error("Error inesperado al obtener información de la colección")
         st.error(f"Detalles del error: {str(e)}")
+        if 'response' in locals():
+            st.error(f"Respuesta del servidor: {response.text}")
         st.stop()
 
 # Initialize Qdrant client with cloud storage
