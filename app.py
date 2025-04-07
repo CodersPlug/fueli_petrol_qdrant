@@ -1,5 +1,7 @@
 import streamlit as st
 import traceback
+import requests
+import json
 
 # Configure Streamlit page - must be the first st command
 st.set_page_config(
@@ -10,6 +12,7 @@ st.set_page_config(
 
 from openai import OpenAI
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 # Collection configuration
 COLLECTION_NAME = "petrol_transactions"
@@ -28,6 +31,25 @@ def get_openai_client():
         st.error(f"Traceback: {traceback.format_exc()}")
         st.stop()
 
+def get_collection_info_direct(url: str, api_key: str) -> dict:
+    """Get collection info directly using requests to handle version mismatches."""
+    try:
+        headers = {
+            "api-key": api_key,
+            "Content-Type": "application/json"
+        }
+        response = requests.get(
+            f"{url}/collections/{COLLECTION_NAME}",
+            headers=headers,
+            timeout=60
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error("Error al obtener información de la colección directamente")
+        st.error(f"Detalles del error: {str(e)}")
+        st.stop()
+
 # Initialize Qdrant client with cloud storage
 @st.cache_resource(show_spinner=False)
 def get_qdrant_client():
@@ -36,39 +58,46 @@ def get_qdrant_client():
         url = str(st.secrets["QDRANT_URL"]).strip()
         api_key = str(st.secrets["QDRANT_API_KEY"]).strip()
         
-        client = QdrantClient(
+        return QdrantClient(
             url=url,
             api_key=api_key,
             timeout=60,  # Increased timeout for cloud operations
             prefer_grpc=False  # Force HTTP
         )
-        
-        # Test the connection immediately
-        client.get_collections()
-        return client
     except Exception as e:
         st.error("Error al conectar con Qdrant Cloud")
         st.error(f"Detalles del error: {str(e)}")
-        st.error(f"Traceback: {traceback.format_exc()}")
         st.stop()
 
 def check_collection_exists():
     """Check if the collection exists and has data."""
     try:
-        qdrant = get_qdrant_client()
-        collection_info = qdrant.get_collection(COLLECTION_NAME)
-        points_count = collection_info.points_count
+        url = str(st.secrets["QDRANT_URL"]).strip()
+        api_key = str(st.secrets["QDRANT_API_KEY"]).strip()
+        
+        # Try to get collection info directly first
+        collection_info = get_collection_info_direct(url, api_key)
+        
+        if not collection_info:
+            st.error("No se pudo obtener información de la colección")
+            st.stop()
+            
+        points_count = collection_info.get("vectors_count", 0)
         
         st.sidebar.info(f"Conectado a la base de datos. Registros disponibles: {points_count:,}")
         
         if points_count == 0:
             st.error("La base de datos está vacía. Por favor, ejecute primero el script preprocess_data.py")
             st.stop()
+            
+        # Initialize the client only after we confirm the collection exists
+        global _qdrant_client
+        _qdrant_client = get_qdrant_client()
+        
         return True
     except Exception as e:
         st.error("Error al verificar la colección en Qdrant Cloud")
         st.error(f"Detalles del error: {str(e)}")
-        st.error(f"Traceback: {traceback.format_exc()}")
         st.stop()
 
 def get_answer_from_gpt(query: str, context: list[str]) -> str:
@@ -110,7 +139,6 @@ def search_similar_transactions(query: str, limit: int = 10):
     """Search for similar transactions using the query text."""
     try:
         client = get_openai_client()
-        qdrant = get_qdrant_client()
         
         # Get embedding for the query
         response = client.embeddings.create(
@@ -121,7 +149,7 @@ def search_similar_transactions(query: str, limit: int = 10):
         query_vector = response.data[0].embedding
         
         # Search in Qdrant using search method
-        search_result = qdrant.search(
+        search_result = _qdrant_client.search(
             collection_name=COLLECTION_NAME,
             query_vector=query_vector,
             limit=limit
