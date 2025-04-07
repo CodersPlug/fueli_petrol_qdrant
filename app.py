@@ -23,13 +23,16 @@ VECTOR_SIZE = 3072
 def get_openai_client():
     """Initialize OpenAI client with error handling."""
     try:
-        api_key = st.secrets["OPENAI_API_KEY"]
+        api_key = st.secrets.get("OPENAI_API_KEY")
         if not api_key:
             st.error("Error: No se encontró la clave API de OpenAI")
             st.stop()
         
-        # Initialize without any extra arguments that could cause issues
-        return OpenAI(api_key=api_key)
+        # Most basic initialization possible
+        return OpenAI(
+            api_key=api_key,
+            base_url="https://api.openai.com/v1"  # Explicitly set base URL
+        )
         
     except Exception as e:
         st.error("Error al inicializar el cliente de OpenAI")
@@ -87,15 +90,22 @@ def get_collection_info_direct(url: str, api_key: str) -> dict:
 def get_qdrant_client():
     """Get or create a singleton Qdrant client instance."""
     try:
-        url = str(st.secrets["QDRANT_URL"]).strip()
-        api_key = str(st.secrets["QDRANT_API_KEY"]).strip()
+        url = st.secrets.get("QDRANT_URL")
+        api_key = st.secrets.get("QDRANT_API_KEY")
         
-        return QdrantClient(
-            url=url,
-            api_key=api_key,
-            timeout=60,  # Increased timeout for cloud operations
-            prefer_grpc=False  # Force HTTP
-        )
+        if not url or not api_key:
+            st.error("Error: No se encontraron las credenciales de Qdrant")
+            st.stop()
+        
+        # Initialize with explicit parameters
+        client_params = {
+            "url": url,
+            "api_key": api_key,
+            "timeout": 60,  # Increased timeout for cloud operations
+            "prefer_grpc": False  # Force HTTP
+        }
+        return QdrantClient(**client_params)
+        
     except Exception as e:
         st.error("Error al conectar con Qdrant Cloud")
         st.error(f"Detalles del error: {str(e)}")
