@@ -28,11 +28,8 @@ def get_openai_client():
             st.error("Error: No se encontró la clave API de OpenAI")
             st.stop()
         
-        # Most basic initialization possible
-        return OpenAI(
-            api_key=api_key,
-            base_url="https://api.openai.com/v1"  # Explicitly set base URL
-        )
+        # Initialize with just the API key
+        return OpenAI(api_key=api_key)
         
     except Exception as e:
         st.error("Error al inicializar el cliente de OpenAI")
