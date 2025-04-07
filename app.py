@@ -12,12 +12,20 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import SearchRequest
 
 # Initialize OpenAI client
-api_key = st.secrets["OPENAI_API_KEY"]
-if not api_key:
-    st.error("Error: OPENAI_API_KEY not found in secrets")
-    st.stop()
+@st.cache_resource
+def get_openai_client():
+    """Get or create a singleton OpenAI client instance."""
+    try:
+        api_key = st.secrets["OPENAI_API_KEY"]
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found in secrets")
+        return OpenAI(api_key=api_key)
+    except Exception as e:
+        st.error(f"Error initializing OpenAI client: {str(e)}")
+        st.stop()
 
-client = OpenAI(api_key=api_key)
+# Get the OpenAI client instance
+client = get_openai_client()
 
 # Initialize Qdrant client with cloud storage
 @st.cache_resource
