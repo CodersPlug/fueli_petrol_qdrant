@@ -46,18 +46,16 @@ def get_collection_info_direct(url: str, api_key: str) -> dict:
         response.raise_for_status()
         
         # Parse JSON response
-        try:
-            data = response.json()
-        except json.JSONDecodeError:
-            st.error("Error al decodificar la respuesta JSON del servidor")
-            st.error(f"Respuesta del servidor: {response.text}")
-            st.stop()
-            
-        # Extract points count from response
+        data = response.json()
+        
+        # Looking at the actual response format we're getting:
+        # {"result":{"status":"green","optimizer_status":"ok","indexed_vectors_count":82100,"points_count":82311,...}}
         if isinstance(data, dict):
             result = data.get("result", {})
-            status = result.get("status", {})
-            points_count = status.get("points_count", 0)
+            points_count = result.get("points_count", 0)
+            if points_count == 0:
+                # Try alternative fields if points_count is 0
+                points_count = result.get("indexed_vectors_count", 0)
             
             return {
                 "vectors_count": points_count,
