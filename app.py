@@ -9,44 +9,56 @@ st.set_page_config(
 
 from openai import OpenAI
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import SearchRequest
 
 # Initialize OpenAI client
 @st.cache_resource
 def get_openai_client():
     """Get or create a singleton OpenAI client instance."""
     try:
-        api_key = st.secrets["OPENAI_API_KEY"]
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not found in secrets")
+        if "OPENAI_API_KEY" not in st.secrets:
+            st.error("Error: OPENAI_API_KEY no encontrada en los secretos de la aplicación")
+            st.error("Por favor, configure la API key en la configuración de Streamlit Cloud")
+            st.stop()
         
-        try:
-            # First try the new style initialization
-            return OpenAI(api_key=api_key)
-        except TypeError:
-            # If that fails, try importing the older version
-            import openai
-            openai.api_key = api_key
-            return openai
+        api_key = str(st.secrets["OPENAI_API_KEY"]).strip()
+        if not api_key:
+            st.error("Error: OPENAI_API_KEY está vacía")
+            st.stop()
+            
+        return OpenAI(api_key=api_key)
     except Exception as e:
-        st.error(f"Error initializing OpenAI client: {str(e)}")
-        st.error("Please check that openai package is installed correctly")
+        st.error(f"Error al inicializar el cliente de OpenAI: {str(e)}")
         st.stop()
-
-# Get the OpenAI client instance
-client = get_openai_client()
 
 # Initialize Qdrant client with cloud storage
 @st.cache_resource
 def get_qdrant_client():
     """Get or create a singleton Qdrant client instance."""
     try:
+        if "QDRANT_URL" not in st.secrets:
+            st.error("Error: QDRANT_URL no encontrada en los secretos de la aplicación")
+            st.error("Por favor, configure la URL de Qdrant en la configuración de Streamlit Cloud")
+            st.stop()
+            
+        if "QDRANT_API_KEY" not in st.secrets:
+            st.error("Error: QDRANT_API_KEY no encontrada en los secretos de la aplicación")
+            st.error("Por favor, configure la API key de Qdrant en la configuración de Streamlit Cloud")
+            st.stop()
+            
+        url = str(st.secrets["QDRANT_URL"]).strip()
+        api_key = str(st.secrets["QDRANT_API_KEY"]).strip()
+        
+        if not url or not api_key:
+            st.error("Error: QDRANT_URL o QDRANT_API_KEY están vacías")
+            st.stop()
+            
         return QdrantClient(
-            url=st.secrets["QDRANT_URL"],
-            api_key=st.secrets["QDRANT_API_KEY"]
+            url=url,
+            api_key=api_key,
+            timeout=60  # Increased timeout for cloud operations
         )
     except Exception as e:
-        st.error(f"Error connecting to Qdrant Cloud: {str(e)}")
+        st.error(f"Error al conectar con Qdrant Cloud: {str(e)}")
         st.stop()
 
 # Collection configuration
@@ -69,37 +81,43 @@ def check_collection_exists():
 
 def get_answer_from_gpt(query: str, context: list[str]) -> str:
     """Get a concise answer from GPT based on the search results."""
-    system_message = """Eres un experto analista de datos de ventas de combustible.
-    Tu tarea es analizar los datos proporcionados y responder preguntas sobre las ventas.
-    IMPORTANTE:
-    - Responde de manera CONCISA y DIRECTA en una sola línea
-    - NO des explicaciones ni contexto adicional
-    - Si la pregunta requiere análisis de totales o tendencias, calcula los números exactos
-    - Responde siempre en español"""
-    
-    context_text = "\n".join([f"- {text}" for text in context])
-    user_message = f"""Pregunta: {query}
+    try:
+        client = get_openai_client()
+        system_message = """Eres un experto analista de datos de ventas de combustible.
+        Tu tarea es analizar los datos proporcionados y responder preguntas sobre las ventas.
+        IMPORTANTE:
+        - Responde de manera CONCISA y DIRECTA en una sola línea
+        - NO des explicaciones ni contexto adicional
+        - Si la pregunta requiere análisis de totales o tendencias, calcula los números exactos
+        - Responde siempre en español"""
+        
+        context_text = "\n".join([f"- {text}" for text in context])
+        user_message = f"""Pregunta: {query}
 
 Datos relevantes:
 {context_text}
 
 Responde de manera concisa y directa:"""
-    
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message}
-        ],
-        temperature=0.3,
-        max_tokens=100
-    )
-    
-    return response.choices[0].message.content
+        
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.3,
+            max_tokens=100
+        )
+        
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error al generar respuesta: {str(e)}")
+        st.stop()
 
 def search_similar_transactions(query: str, limit: int = 10):
     """Search for similar transactions using the query text."""
     try:
+        client = get_openai_client()
         qdrant = get_qdrant_client()
         
         # Get embedding for the query
