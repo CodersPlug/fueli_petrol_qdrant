@@ -134,8 +134,6 @@ def check_collection_exists():
             
         points_count = collection_info.get("vectors_count", 0)
         
-        st.sidebar.info(f"Conectado a la base de datos. Registros disponibles: {points_count:,}")
-        
         if points_count == 0:
             st.error("La base de datos está vacía. Por favor, ejecute primero el script preprocess_data.py")
             st.stop()
@@ -144,7 +142,7 @@ def check_collection_exists():
         global _qdrant_client
         _qdrant_client = get_qdrant_client()
         
-        return True
+        return points_count
     except Exception as e:
         st.error("Error al verificar la colección en Qdrant Cloud")
         st.error(f"Detalles del error: {str(e)}")
@@ -214,18 +212,29 @@ def main():
     st.title("🔍 Análisis de Ventas de Combustible")
     
     try:
-        # Check if database is ready
-        check_collection_exists()
+        # Check if database is ready and get record count
+        points_count = check_collection_exists()
         
-        # Add example questions
-        with st.expander("📝 Ejemplos de preguntas"):
-            st.markdown("""
-            - ¿Cuál es el producto más vendido?
-            - ¿Cuántas ventas hubo en enero?
-            - ¿Cuál fue la venta más grande?
-            - ¿En qué pico se despachó más NS XXI?
-            - ¿Cuánto se facturó en total de NS XXI?
-            """)
+        # Create two columns for the header area
+        col1, col2 = st.columns([3, 1])
+        
+        # Add example questions in the left column
+        with col1:
+            with st.expander("📝 Ejemplos de preguntas"):
+                st.markdown("""
+                - ¿Cuál es el producto más vendido?
+                - ¿Cuántas ventas hubo en enero?
+                - ¿Cuál fue la venta más grande?
+                - ¿En qué pico se despachó más NS XXI?
+                - ¿Cuánto se facturó en total de NS XXI?
+                """)
+        
+        # Add database status in the right column
+        with col2:
+            st.metric(
+                label="Registros en la base de datos",
+                value=f"{points_count:,}"
+            )
         
         # Search interface
         query = st.text_input("💭 Ingrese su pregunta:", placeholder="Ejemplo: ¿Cuál es el producto más vendido?")
@@ -248,7 +257,6 @@ def main():
                     st.warning("No se encontraron resultados relevantes.")
     except Exception as e:
         st.error(f"Error inesperado: {str(e)}")
-        st.stop()
 
 if __name__ == "__main__":
     main() 
