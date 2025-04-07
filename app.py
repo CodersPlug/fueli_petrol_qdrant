@@ -21,14 +21,19 @@ VECTOR_SIZE = 3072
 # Initialize OpenAI client
 @st.cache_resource(show_spinner=False)
 def get_openai_client():
-    """Get or create a singleton OpenAI client instance."""
+    """Initialize OpenAI client with error handling."""
     try:
-        api_key = str(st.secrets["OPENAI_API_KEY"]).strip()
+        api_key = st.secrets["OPENAI_API_KEY"]
+        if not api_key:
+            st.error("Error: No se encontró la clave API de OpenAI")
+            st.stop()
+        
+        # Initialize without any extra arguments that could cause issues
         return OpenAI(api_key=api_key)
+        
     except Exception as e:
         st.error("Error al inicializar el cliente de OpenAI")
         st.error(f"Detalles del error: {str(e)}")
-        st.error(f"Traceback: {traceback.format_exc()}")
         st.stop()
 
 def get_collection_info_direct(url: str, api_key: str) -> dict:
