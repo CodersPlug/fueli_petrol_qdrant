@@ -1,4 +1,5 @@
 import streamlit as st
+import traceback
 
 # Configure Streamlit page - must be the first st command
 st.set_page_config(
@@ -10,73 +11,63 @@ st.set_page_config(
 from openai import OpenAI
 from qdrant_client import QdrantClient
 
-# Initialize OpenAI client
-@st.cache_resource
-def get_openai_client():
-    """Get or create a singleton OpenAI client instance."""
-    try:
-        if "OPENAI_API_KEY" not in st.secrets:
-            st.error("Error: OPENAI_API_KEY no encontrada en los secretos de la aplicación")
-            st.error("Por favor, configure la API key en la configuración de Streamlit Cloud")
-            st.stop()
-        
-        api_key = str(st.secrets["OPENAI_API_KEY"]).strip()
-        if not api_key:
-            st.error("Error: OPENAI_API_KEY está vacía")
-            st.stop()
-            
-        return OpenAI(api_key=api_key)
-    except Exception as e:
-        st.error(f"Error al inicializar el cliente de OpenAI: {str(e)}")
-        st.stop()
-
-# Initialize Qdrant client with cloud storage
-@st.cache_resource
-def get_qdrant_client():
-    """Get or create a singleton Qdrant client instance."""
-    try:
-        if "QDRANT_URL" not in st.secrets:
-            st.error("Error: QDRANT_URL no encontrada en los secretos de la aplicación")
-            st.error("Por favor, configure la URL de Qdrant en la configuración de Streamlit Cloud")
-            st.stop()
-            
-        if "QDRANT_API_KEY" not in st.secrets:
-            st.error("Error: QDRANT_API_KEY no encontrada en los secretos de la aplicación")
-            st.error("Por favor, configure la API key de Qdrant en la configuración de Streamlit Cloud")
-            st.stop()
-            
-        url = str(st.secrets["QDRANT_URL"]).strip()
-        api_key = str(st.secrets["QDRANT_API_KEY"]).strip()
-        
-        if not url or not api_key:
-            st.error("Error: QDRANT_URL o QDRANT_API_KEY están vacías")
-            st.stop()
-            
-        return QdrantClient(
-            url=url,
-            api_key=api_key,
-            timeout=60  # Increased timeout for cloud operations
-        )
-    except Exception as e:
-        st.error(f"Error al conectar con Qdrant Cloud: {str(e)}")
-        st.stop()
-
 # Collection configuration
 COLLECTION_NAME = "petrol_transactions"
 VECTOR_SIZE = 3072
 
+# Initialize OpenAI client
+@st.cache_resource(show_spinner=False)
+def get_openai_client():
+    """Get or create a singleton OpenAI client instance."""
+    try:
+        api_key = str(st.secrets["OPENAI_API_KEY"]).strip()
+        return OpenAI(api_key=api_key)
+    except Exception as e:
+        st.error("Error al inicializar el cliente de OpenAI")
+        st.error(f"Detalles del error: {str(e)}")
+        st.error(f"Traceback: {traceback.format_exc()}")
+        st.stop()
+
+# Initialize Qdrant client with cloud storage
+@st.cache_resource(show_spinner=False)
+def get_qdrant_client():
+    """Get or create a singleton Qdrant client instance."""
+    try:
+        url = str(st.secrets["QDRANT_URL"]).strip()
+        api_key = str(st.secrets["QDRANT_API_KEY"]).strip()
+        
+        client = QdrantClient(
+            url=url,
+            api_key=api_key,
+            timeout=60  # Increased timeout for cloud operations
+        )
+        
+        # Test the connection immediately
+        client.get_collections()
+        return client
+    except Exception as e:
+        st.error("Error al conectar con Qdrant Cloud")
+        st.error(f"Detalles del error: {str(e)}")
+        st.error(f"Traceback: {traceback.format_exc()}")
+        st.stop()
+
 def check_collection_exists():
     """Check if the collection exists and has data."""
-    qdrant = get_qdrant_client()
     try:
+        qdrant = get_qdrant_client()
         collection_info = qdrant.get_collection(COLLECTION_NAME)
         points_count = collection_info.points_count
+        
+        st.sidebar.info(f"Conectado a la base de datos. Registros disponibles: {points_count:,}")
+        
         if points_count == 0:
             st.error("La base de datos está vacía. Por favor, ejecute primero el script preprocess_data.py")
             st.stop()
         return True
     except Exception as e:
-        st.error("Error: La base de datos no está inicializada. Por favor, ejecute primero el script preprocess_data.py")
+        st.error("Error al verificar la colección en Qdrant Cloud")
+        st.error(f"Detalles del error: {str(e)}")
+        st.error(f"Traceback: {traceback.format_exc()}")
         st.stop()
 
 def get_answer_from_gpt(query: str, context: list[str]) -> str:
