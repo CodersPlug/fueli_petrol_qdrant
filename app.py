@@ -40,10 +40,7 @@ def get_qdrant_client():
             url=url,
             api_key=api_key,
             timeout=60,  # Increased timeout for cloud operations
-            prefer_grpc=False,  # Force HTTP
-            https=True,  # Force HTTPS
-            max_retries=3,  # Add retries
-            retry_delay=1,  # 1 second between retries
+            prefer_grpc=False  # Force HTTP
         )
         
         # Test the connection immediately
