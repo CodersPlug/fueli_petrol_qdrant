@@ -2,6 +2,7 @@ import streamlit as st
 import traceback
 import requests
 import json
+import httpx
 
 # Configure Streamlit page - must be the first st command
 st.set_page_config(
@@ -28,8 +29,18 @@ def get_openai_client():
             st.error("Error: No se encontró la clave API de OpenAI")
             st.stop()
         
-        # Initialize with just the API key
-        return OpenAI(api_key=api_key)
+        # Create a custom HTTP client without any proxy settings
+        http_client = httpx.Client(
+            base_url="https://api.openai.com/v1",
+            timeout=60.0,
+            follow_redirects=True
+        )
+        
+        # Initialize OpenAI with custom client
+        return OpenAI(
+            api_key=api_key,
+            http_client=http_client
+        )
         
     except Exception as e:
         st.error("Error al inicializar el cliente de OpenAI")
