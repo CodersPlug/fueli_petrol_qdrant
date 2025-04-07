@@ -20,15 +20,17 @@ def get_openai_client():
         if not api_key:
             raise ValueError("OPENAI_API_KEY not found in secrets")
         
-        # Initialize with only the required api_key parameter
-        return OpenAI(api_key=api_key)
-    except TypeError as e:
-        if "proxies" in str(e):
-            # Handle older version compatibility
-            st.error("Error: Please upgrade openai package to version 1.12.0 or higher")
-            st.stop()
+        try:
+            # First try the new style initialization
+            return OpenAI(api_key=api_key)
+        except TypeError:
+            # If that fails, try importing the older version
+            import openai
+            openai.api_key = api_key
+            return openai
     except Exception as e:
         st.error(f"Error initializing OpenAI client: {str(e)}")
+        st.error("Please check that openai package is installed correctly")
         st.stop()
 
 # Get the OpenAI client instance
