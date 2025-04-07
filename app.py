@@ -99,60 +99,68 @@ Responde de manera concisa y directa:"""
 
 def search_similar_transactions(query: str, limit: int = 10):
     """Search for similar transactions using the query text."""
-    qdrant = get_qdrant_client()
-    
-    # Get embedding for the query
-    response = client.embeddings.create(
-        model="text-embedding-3-large",
-        input=query,
-        dimensions=VECTOR_SIZE
-    )
-    query_vector = response.data[0].embedding
-    
-    # Search in Qdrant using search method
-    search_result = qdrant.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
-        limit=limit
-    )
-    
-    return search_result
+    try:
+        qdrant = get_qdrant_client()
+        
+        # Get embedding for the query
+        response = client.embeddings.create(
+            model="text-embedding-3-large",
+            input=query,
+            dimensions=VECTOR_SIZE
+        )
+        query_vector = response.data[0].embedding
+        
+        # Search in Qdrant using search method
+        search_result = qdrant.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
+            limit=limit
+        )
+        
+        return search_result
+    except Exception as e:
+        st.error(f"Error al buscar transacciones similares: {str(e)}")
+        st.stop()
 
 def main():
     st.title("🔍 Análisis de Ventas de Combustible")
     
-    # Check if database is ready
-    check_collection_exists()
-    
-    # Add example questions
-    with st.expander("📝 Ejemplos de preguntas"):
-        st.markdown("""
-        - ¿Cuál es el producto más vendido?
-        - ¿Cuántas ventas hubo en enero?
-        - ¿Cuál fue la venta más grande?
-        - ¿En qué pico se despachó más NS XXI?
-        - ¿Cuánto se facturó en total de NS XXI?
-        """)
-    
-    # Search interface
-    query = st.text_input("💭 Ingrese su pregunta:", placeholder="Ejemplo: ¿Cuál es el producto más vendido?")
-    
-    if query:
-        with st.spinner("Analizando..."):
-            # Get relevant transactions
-            results = search_similar_transactions(query)
-            
-            if results:
-                # Extract texts from results
-                relevant_texts = [hit.payload['text'] for hit in results]
+    try:
+        # Check if database is ready
+        check_collection_exists()
+        
+        # Add example questions
+        with st.expander("📝 Ejemplos de preguntas"):
+            st.markdown("""
+            - ¿Cuál es el producto más vendido?
+            - ¿Cuántas ventas hubo en enero?
+            - ¿Cuál fue la venta más grande?
+            - ¿En qué pico se despachó más NS XXI?
+            - ¿Cuánto se facturó en total de NS XXI?
+            """)
+        
+        # Search interface
+        query = st.text_input("💭 Ingrese su pregunta:", placeholder="Ejemplo: ¿Cuál es el producto más vendido?")
+        
+        if query:
+            with st.spinner("Analizando..."):
+                # Get relevant transactions
+                results = search_similar_transactions(query)
                 
-                # Get answer from GPT
-                answer = get_answer_from_gpt(query, relevant_texts)
-                
-                # Display answer
-                st.success(answer)
-            else:
-                st.warning("No se encontraron resultados relevantes.")
+                if results:
+                    # Extract texts from results
+                    relevant_texts = [hit.payload['text'] for hit in results]
+                    
+                    # Get answer from GPT
+                    answer = get_answer_from_gpt(query, relevant_texts)
+                    
+                    # Display answer
+                    st.success(answer)
+                else:
+                    st.warning("No se encontraron resultados relevantes.")
+    except Exception as e:
+        st.error(f"Error inesperado: {str(e)}")
+        st.stop()
 
 if __name__ == "__main__":
     main() 
